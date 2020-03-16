@@ -1,0 +1,71 @@
+name: events-api-ig
+instance_template:
+  platform_id: standard-v2
+  resources_spec:
+    memory: "2147483648"
+    cores: "2"
+    core_fraction: "100"
+  metadata:
+    docker-container-declaration: |
+      spec:
+        containers:
+          - name: api
+            image: cr.yandex/crp9h94408osj41k4oe3/events-api:IMAGE_TAG
+            command:
+              - /app/app
+            args:
+              - -kafka=172.16.1.29:9092,172.16.1.32:9092,172.16.1.25:9092
+              - -enable-kafka
+              - -sqs-uri=https://message-queue.api.cloud.yandex.net/b1gv67ihgfu3bpt24o0q/dj6000000000m4t607bu/load
+              - -sqs-id=veXDMRkg4LqWsmMm1Kes
+              - -sqs-secret=H09WgMAqp-VyxIxPFHnd_Py2azsw5U36sv6INs-K
+              - -enable-sqs
+            securityContext:
+              privileged: false
+            tty: false
+            stdin: false
+            restartPolicy: Always
+    ssh-keys: |
+      ubuntu:ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCtCGJinXDwKlenUFSsGWisxaF0DcNiV8utVEmfka3se0CW2yNIr1vDCeJxPdAlxGG0O/28WLWuTArLiDsTJjYqN+VchXLAfQmCn+5A313RjZlJK0KSxgL8IP6Q68diUzuCKdisjhKIKISTCzfL7uTKE0JEsUsF7bfSYvOEBtYFLWD1XH4qmi6HeFpSsnr7EPVC7FZzFdOgpZ6Vm6fwS7ygdVLapm6SH1lkNm0Xnt3WjaPkZaWRcAmUxC0RWT36QNwbBKTVLaFbfuF4FBeuBm7cwt2a/nnQzpbk9lVkeZYhFxH/5Zi8Uv8LYYJwTBvYzXaceDdH2zSxYwltiCTaKiYl vozerov@MacBook-Pro-Vasilij.local
+  boot_disk_spec:
+    mode: READ_WRITE
+    disk_spec:
+      type_id: network-hdd
+      size: "10737418240"
+      image_id: fd81hkvlkchmq82f38i8
+  network_interface_specs:
+  - network_id: enp7ni5cqu20lnsrauul
+    subnet_ids:
+    - e9b4tv2jitma6lk8bm9e
+    - e2lpiucn0e3uvrmnqjgr
+    - b0c12sh14ofec25dfb5g
+    primary_v4_address_spec:
+      one_to_one_nat_spec:
+        ip_version: IPV4
+  scheduling_policy: {}
+  service_account_id: aje6otep48sndd8996up
+scale_policy:
+  auto_scale:
+    min_zone_size: "1"
+    max_size: "6"
+    measurement_duration: 60s
+    warmup_duration: 60s
+    stabilization_duration: 180s
+    initial_size: "3"
+    cpu_utilization_rule:
+      utilization_target: 60
+deploy_policy:
+  max_unavailable: "2"
+  max_deleting: "3"
+  max_creating: "3"
+  max_expansion: "3"
+  startup_duration: 0s
+allocation_policy:
+  zones:
+  - zone_id: ru-central1-b
+  - zone_id: ru-central1-c
+  - zone_id: ru-central1-a
+load_balancer_spec:
+  target_group_spec:
+    name: events-api-tg
+service_account_id: ajetbm3eqsn2sjakgo3b

@@ -1,16 +1,18 @@
 stages:
   - build
+  - deploy
 
 variables:
   DOCKER_REGISTRY: 'cr.yandex/crp9h94408osj41k4oe3'
   DOCKER_IMAGE: 'events-api'
   DOCKER_TLS_CERTDIR: "/certs"
+  YC_CLOUD_ID: "b1gv67ihgfu3bpt24o0q"
+  YC_FOLDER_ID: "b1g1bdbcesie0hup4tev"
+  YC_DEFAULT_ZONE: "ru-central1-c"
+  YC_INSTANCE_GROUP: "events-api-ig"
 
 services:
   - docker:dind
-
-before_script:
-  - docker info
 
 build:
   stage: build
@@ -18,5 +20,20 @@ build:
   script:
     - echo $DOCKER_REGISTRY_KEY | docker login --username json_key --password-stdin cr.yandex
     - docker build -t ${DOCKER_REGISTRY}/${DOCKER_IMAGE}:${CI_PIPELINE_ID} .
+    - docker tag ${DOCKER_REGISTRY}/${DOCKER_IMAGE}:${CI_PIPELINE_ID} ${DOCKER_REGISTRY}/${DOCKER_IMAGE}:latest
     - docker push ${DOCKER_REGISTRY}/${DOCKER_IMAGE}:${CI_PIPELINE_ID}
+    - docker push ${DOCKER_REGISTRY}/${DOCKER_IMAGE}:latest
 
+deploy:
+  stage: deploy
+  image: ubuntu:18.04
+  script:
+    - apt-get update && apt-get install -y curl
+    - curl -s -o /tmp/install.sh https://storage.yandexcloud.net/yandexcloud-yc/install.sh && bash /tmp/install.sh -i /usr -n
+    - source ~/.bashrc
+    - yc config set token $YC_TOKEN
+    - yc config set cloud-id $YC_CLOUD_ID
+    - yc config set folder-id $YC_FOLDER_ID
+    - yc config set compute-default-zone $YC_DEFAULT_ZONE
+    - sed -i "s/IMAGE_TAG/${CI_PIPELINE_ID}/g" .ig-spec.yml
+    - yc compute instance-group update --name $YC_INSTANCE_GROUP --file .ig-spec.yml
