@@ -20,6 +20,7 @@ instance_template:
               - -sqs-id=veXDMRkg4LqWsmMm1Kes
               - -sqs-secret=H09WgMAqp-VyxIxPFHnd_Py2azsw5U36sv6INs-K
               - -enable-sqs
+              - -consul-addr=consul.ru-central1.internal:8500
             securityContext:
               privileged: false
             tty: false

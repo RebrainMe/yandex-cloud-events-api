@@ -7,13 +7,17 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
+	"os"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/Shopify/sarama"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/sqs"
+	consul "github.com/hashicorp/consul/api"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/streadway/amqp"
@@ -21,7 +25,7 @@ import (
 
 var (
 	// Config options
-	addr        = flag.String("addr", ":8080", "TCP address to listen to")
+	port        = flag.Int("port", 8080, "TCP port to listen on")
 	kafka       = flag.String("kafka", "127.0.0.1:9092", "Kafka endpoints")
 	enableKafka = flag.Bool("enable-kafka", false, "Enable Kafka or nor")
 	amqpUri     = flag.String("amqp", "amqp://guest:guest@127.0.0.1:5672/", "AMQP URI")
@@ -30,6 +34,7 @@ var (
 	sqsId       = flag.String("sqs-id", "", "SQS Access id")
 	sqsSecret   = flag.String("sqs-secret", "", "SQS Secret key")
 	enableSqs   = flag.Bool("enable-sqs", false, "Enable SQS or not")
+	consulAddr  = flag.String("consul-addr", "127.0.0.1", "Consul endpoint")
 
 	producer   sarama.SyncProducer
 	queue      amqp.Queue
@@ -69,6 +74,47 @@ func init() {
 	prometheus.MustRegister(apiRequestsCount)
 	prometheus.MustRegister(apiErrorsCount)
 	prometheus.MustRegister(prometheus.NewBuildInfoCollector())
+}
+
+func initConsul() error {
+	config := consul.DefaultConfig()
+	config.Address = *consulAddr
+
+	client, err := consul.NewClient(config)
+	if err != nil {
+		return err
+	}
+
+	hostname, err := os.Hostname()
+	if err != nil {
+		return err
+	}
+
+	serviceDef := &consul.AgentServiceRegistration{
+		ID:      "events-api-" + hostname,
+		Name:    "events-api",
+		Address: hostname + ".ru-central1.internal",
+		Port:    *port,
+		Check: &consul.AgentServiceCheck{
+			TTL: "10s",
+			DeregisterCriticalServiceAfter: "15s",
+		},
+	}
+
+	if err := client.Agent().ServiceRegister(serviceDef); err != nil {
+		return err
+	}
+
+	go func(c *consul.Agent, hostname string) {
+		ticker := time.NewTicker(5 * time.Second)
+		for range ticker.C {
+			log.Printf("Updating service check...")
+			c.UpdateTTL("service:events-api-"+hostname, "", "pass")
+		}
+
+	}(client.Agent(), hostname)
+
+	return nil
 }
 
 func main() {
@@ -131,13 +177,20 @@ func main() {
 
 	}
 
+	log.Printf("Enabling consul: %s\n", *consulAddr)
+	err = initConsul()
+	if err != nil {
+		log.Fatalf("Can't open channel")
+	}
+	log.Printf("Successfully connected to consul")
+
 	http.HandleFunc("/status", statusHandlerFunc)
 	http.HandleFunc("/post/kafka", postKafkaHandlerFunc)
 	http.HandleFunc("/post/amqp", postAMQPHandlerFunc)
 	http.HandleFunc("/post/sqs", postSQSHandlerFunc)
 	http.Handle("/metrics", promhttp.Handler())
 
-	if err := http.ListenAndServe(*addr, nil); err != nil {
+	if err := http.ListenAndServe(":"+strconv.Itoa(*port), nil); err != nil {
 		log.Fatalf("Error in ListenAndServe: %s", err)
 	}
 }
